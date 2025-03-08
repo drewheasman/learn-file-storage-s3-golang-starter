@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
@@ -33,7 +34,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 
 	const maxMemory = 10 << 20
 
-	r.ParseMultipartForm(maxMemory)
+	err = r.ParseMultipartForm(maxMemory)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Couldn't get file data", err)
 		return
@@ -56,6 +57,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		respondWithError(w, http.StatusBadRequest, "Error reading file data", err)
 		return
 	}
+	imageBase64 := base64.StdEncoding.EncodeToString(imageData)
 
 	metadata, err := cfg.db.GetVideo(videoID)
 	if err != nil {
@@ -67,14 +69,8 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	newURL := "http://localhost:8091/api/thumbnails/" + videoID.String()
+	newURL := "data:" + mediaType + ";base64," + imageBase64
 	metadata.ThumbnailURL = &newURL
-
-	t := thumbnail{
-		data:      imageData,
-		mediaType: mediaType,
-	}
-	videoThumbnails[videoID] = t
 
 	err = cfg.db.UpdateVideo(metadata)
 	if err != nil {
