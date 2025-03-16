@@ -46,6 +46,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	}
 
 	fileData, fileHeader, err := r.FormFile("thumbnail")
+	defer fileData.Close()
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Couldn't get file data", err)
 		return
