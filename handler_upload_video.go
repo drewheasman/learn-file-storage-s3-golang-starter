@@ -112,6 +112,13 @@ func getVideoAspectRatio(filePath string) (string, error) {
 	return "other", nil
 }
 
+func processVideoForFastStart(filePath string) (string, error) {
+	outputFilePath := filePath + ".processing"
+	ffmpegCommand := exec.Command("ffmpeg", "-i", filePath, "-c", "copy", "-movflags", "faststart", "-f", "mp4", outputFilePath)
+	err := ffmpegCommand.Run()
+	return outputFilePath, err
+}
+
 func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request) {
 	videoIDString := r.PathValue("videoID")
 	videoID, err := uuid.Parse(videoIDString)
@@ -205,10 +212,23 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	}
 	s3Key := fmt.Sprintf("%v/%v.mp4", ratio, base64.RawURLEncoding.EncodeToString(key))
 
+	processedFile, err := processVideoForFastStart(tempFile.Name())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error processing video", err)
+		return
+	}
+	processedFileReader, err := os.Open(processedFile)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error opening processing file", err)
+		return
+	}
+
+	os.Remove(tempFile.Name())
+
 	putParams := s3.PutObjectInput{
 		Bucket:      &cfg.s3Bucket,
 		Key:         &s3Key,
-		Body:        tempFile,
+		Body:        processedFileReader,
 		ContentType: &mimeType,
 	}
 	_, err = cfg.s3Client.PutObject(context.Background(), &putParams)
@@ -217,7 +237,6 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// oiwjroijwrgoijwrjogi
 	videoURL := fmt.Sprintf("https://%v.s3.%v.amazonaws.com/%v", cfg.s3Bucket, cfg.s3Region, s3Key)
 	metadata.VideoURL = &videoURL
 
