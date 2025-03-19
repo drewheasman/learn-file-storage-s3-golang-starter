@@ -6,7 +6,6 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -14,12 +13,10 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
-	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/database"
 	"github.com/google/uuid"
 )
 
@@ -258,7 +255,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	videoURL := fmt.Sprintf("%v,%v", cfg.s3Bucket, s3Key)
+	videoURL := fmt.Sprintf("%v/%v", cfg.s3CfDistribution, s3Key)
 	video.VideoURL = &videoURL
 
 	err = cfg.db.UpdateVideo(video)
@@ -267,24 +264,5 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	video, err = cfg.dbVideoToSignedVideo(video)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Failed to get presigned video url", err)
-		return
-	}
-
 	respondWithJSON(w, http.StatusOK, video)
-}
-
-func (cfg *apiConfig) dbVideoToSignedVideo(video database.Video) (database.Video, error) {
-	parts := strings.Split(*video.VideoURL, ",")
-	bucket, key := parts[0], parts[1]
-	if len(parts) != 2 {
-		return video, errors.New("VideoURL has wrong number of parts")
-	}
-
-	var err error
-	*video.VideoURL, err = generatePresignedURL(cfg.s3Client, bucket, key, time.Minute)
-
-	return video, err
 }
